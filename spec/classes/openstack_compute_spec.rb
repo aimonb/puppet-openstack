@@ -2,21 +2,39 @@ require 'spec_helper'
 
 describe 'openstack::compute' do
 
+  let :required_params do
+    {
+      :internal_address   => '0.0.0.0',
+      :nova_user_password => 'nova_pass',
+      :rabbit_password    => 'rabbit_pw',
+      :sql_connection     => 'mysql://user:pass@127.0.0.1/nova?charset=utf8',
+    }
+  end
+
   let :default_params do
     {
-      :private_interface         => 'eth0',
-      :internal_address          => '0.0.0.0',
-      :nova_user_password        => 'nova_pass',
-      :rabbit_password           => 'rabbit_pw',
-      :rabbit_host               => '127.0.0.1',
-      :rabbit_virtual_host       => '/',
-      :nova_admin_tenant_name    => 'services',
-      :nova_admin_user           => 'nova',
-      :enabled_apis              => 'ec2,osapi_compute,metadata',
-      :sql_connection            => 'mysql://user:pass@host/dbname/',
-      :cinder_sql_connection     => 'mysql://user:pass@host/dbname/',
-      :quantum                   => false,
-      :fixed_range               => '10.0.0.0/16',
+      :private_interface     => 'eth0',
+      :internal_address      => '0.0.0.0',
+      :nova_user_password    => 'nova_pass',
+      :rabbit_password       => 'rabbit_pw',
+      :rabbit_host           => '127.0.0.1',
+      :rabbit_virtual_host   => '/',
+      :cinder_sql_connection => 'mysql://user:pass@127.0.0.1/cinder?charset=utf8',
+      :quantum               => false,
+      :fixed_range           => '10.0.0.0/16',
+      :verbose               => 'False'
+    }
+  end
+
+  let :override_params do
+    {
+      :private_interface     => 'eth1',
+      :rabbit_virtual_host   => '/nova',
+      :cinder_sql_connection => 'mysql://user2:pass2@127.0.0.1/cinder?charset=utf8',
+      :sql_connection        => 'mysql://user2:pass2@127.0.0.1/nova?charset=utf8',
+      :quantum               => false,
+      :fixed_range           => '10.0.0.0/24',
+      :verbose               => 'True'
     }
   end
 
@@ -29,11 +47,11 @@ describe 'openstack::compute' do
 
   describe "when using default class parameters" do
     let :params do
-      default_params
+      default_params.merge(required_params)
     end
     it {
       should contain_class('nova').with(
-        :sql_connection      => 'mysql://user:pass@host/dbname/',
+        :sql_connection      => 'mysql://user:pass@127.0.0.1/nova?charset=utf8',
         :rabbit_host         => '127.0.0.1',
         :rabbit_userid       => 'nova',
         :rabbit_password     => 'rabbit_pw',
@@ -77,7 +95,7 @@ describe 'openstack::compute' do
         :private_interface   => 'eth1',
         :internal_address    => '127.0.0.1',
         :public_interface    => 'eth2',
-        :sql_connection      => 'mysql://user:passwd@host/name',
+        :sql_connection      => 'mysql://user:pass@127.0.0.1/nova?charset=utf8',
         :nova_user_password  => 'nova_pass',
         :rabbit_host         => 'my_host',
         :rabbit_password     => 'my_rabbit_pw',
@@ -85,7 +103,7 @@ describe 'openstack::compute' do
         :rabbit_virtual_host => '/foo',
         :glance_api_servers  => ['controller:9292'],
         :libvirt_type        => 'qemu',
-        :vncproxy_host       => '127.0.0.2',
+        :vncproxy_host       => '127.0.0.1',
         :vnc_enabled         => false,
         :verbose             => true,
       }
@@ -95,7 +113,7 @@ describe 'openstack::compute' do
     end
     it do
       should contain_class('nova').with(
-        :sql_connection      => 'mysql://user:passwd@host/name',
+        :sql_connection      => 'mysql://user:pass@127.0.0.1/nova?charset=utf8',
         :rabbit_host         => 'my_host',
         :rabbit_userid       => 'my_rabbit_user',
         :rabbit_password     => 'my_rabbit_pw',
@@ -108,7 +126,7 @@ describe 'openstack::compute' do
         :enabled                        => true,
         :vnc_enabled                    => false,
         :vncserver_proxyclient_address  => '127.0.0.1',
-        :vncproxy_host                  => '127.0.0.2'
+        :vncproxy_host                  => '127.0.0.1'
       )
       should contain_class('nova::compute::libvirt').with(
         :libvirt_type     => 'qemu',
@@ -131,7 +149,7 @@ describe 'openstack::compute' do
 
   describe "when enabling volume management" do
     let :params do
-      default_params.merge({
+      default_params.merge(required_params).merge({
         :manage_volumes => true
       })
     end
@@ -149,7 +167,7 @@ describe 'openstack::compute' do
   describe 'when quantum is false' do
     describe 'configuring for multi host' do
       let :params do
-        default_params.merge({
+        default_params.merge(required_params).merge({
           :multi_host       => true,
           :public_interface => 'eth0',
           :quantum          => false
@@ -177,7 +195,7 @@ describe 'openstack::compute' do
     end
     describe 'when overriding network params' do
       let :params do
-        default_params.merge({
+        default_params.merge(required_params).merge({
           :multi_host        => true,
           :public_interface  => 'eth0',
           :manage_volumes    => true,
@@ -196,15 +214,15 @@ describe 'openstack::compute' do
         :network_manager   => 'nova.network.manager.VlanManager',
         :config_overrides  => {'vlan_interface' => 'eth0'},
         :create_networks   => false,
-        'enabled'          => true,
-        'install_service'  => true
+        :enabled           => true,
+        :install_service   => true
       })}
     end
   end
 
   describe "when configuring for multi host without a public interface" do
     let :params do
-      default_params.merge({
+      default_params.merge(required_params).merge({
         :multi_host => true
       })
     end
@@ -216,7 +234,7 @@ describe 'openstack::compute' do
 
   describe "when enabling volume management and using multi host" do
     let :params do
-      default_params.merge({
+      default_params.merge(required_params).merge({
         :multi_host       => true,
         :public_interface => 'eth0',
         :manage_volumes   => true,
@@ -235,7 +253,7 @@ describe 'openstack::compute' do
 
   describe 'when configuring quantum' do
     let :params do
-      default_params.merge({
+      default_params.merge(required_params).merge({
         :internal_address      => '127.0.0.1',
         :public_interface      => 'eth3',
         :quantum               => true,
@@ -267,4 +285,43 @@ describe 'openstack::compute' do
     end
   end
 
+  context 'cinder' do
+
+    context 'when disabled' do
+      let :params do
+        default_params.merge(required_params).merge(:cinder => false)
+      end
+      it 'should not contain cinder classes' do
+        should_not contain_class('cinder::base')
+      end
+    end
+
+    context 'when enabled' do
+      let :params do
+        default_params.merge(required_params)
+      end
+      it 'should configure cinder using defaults' do
+        should contain_class('cinder::base').with(
+          :verbose              => 'False',
+          :sql_connection       => 'mysql://user:pass@127.0.0.1/cinder?charset=utf8',
+          :rabbit_password      => 'rabbit_pw',
+          :rabbit_virtual_host  => '/'
+        )
+      end
+    end
+
+    context 'when overriding config' do
+      let :params do
+        default_params.merge(required_params).merge(override_params)
+      end
+      it 'should configure cinder using override config' do
+        should contain_class('cinder::base').with(
+          :verbose              => 'True',
+          :sql_connection       => 'mysql://user2:pass2@127.0.0.1/cinder?charset=utf8',
+          :rabbit_password      => 'rabbit_pw',
+          :rabbit_virtual_host  => '/nova'
+        )
+      end
+    end
+  end
 end
